@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Owner List Comparison Tool</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f3; color: #1a1a1a; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 2rem 1rem; }
+  .card { background: #fff; border-radius: 16px; border: 1px solid #e5e5e3; padding: 2rem; width: 100%; max-width: 680px; }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { font-size: 14px; color: #666; margin-bottom: 1.75rem; line-height: 1.5; }
+  .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.25rem; }
+  .upload-card {
+    border: 1.5px dashed #d0d0ce; border-radius: 12px; padding: 1.25rem;
+    cursor: pointer; transition: border-color 0.15s, background 0.15s; text-align: center;
+  }
+  .upload-card:hover { border-color: #185FA5; background: #f0f6ff; }
+  .upload-card.ready { border-style: solid; border-color: #1D9E75; background: #f0faf6; }
+  .upload-icon { font-size: 28px; margin-bottom: 8px; }
+  .upload-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .upload-card.ready .upload-label { color: #0F6E56; }
+  .upload-name { font-size: 13px; color: #333; font-weight: 500; word-break: break-all; }
+  .upload-card.ready .upload-name { color: #085041; }
+  .upload-hint { font-size: 12px; color: #aaa; margin-top: 3px; }
+  input[type=file] { display: none; }
+  .run-btn {
+    width: 100%; padding: 13px; font-size: 15px; font-weight: 600;
+    border-radius: 10px; border: none; background: #185FA5; color: #fff;
+    cursor: pointer; transition: opacity 0.15s; letter-spacing: 0.01em;
+  }
+  .run-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .run-btn:not(:disabled):hover { opacity: 0.88; }
+  .status-area { margin-top: 1.25rem; }
+  .status-msg { font-size: 14px; color: #666; margin-bottom: 8px; }
+  .progress-bar { height: 5px; background: #ebebeb; border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; background: #185FA5; border-radius: 3px; transition: width 0.3s; }
+  .results-card { background: #fff; border: 1px solid #e5e5e3; border-radius: 12px; padding: 1.5rem; margin-top: 1.25rem; }
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.25rem; }
+  .stat { background: #f5f5f3; border-radius: 10px; padding: 1rem; text-align: center; }
+  .stat-n { font-size: 26px; font-weight: 600; color: #185FA5; }
+  .stat-label { font-size: 12px; color: #888; margin-top: 3px; }
+  .dl-btn {
+    width: 100%; padding: 11px; font-size: 14px; font-weight: 600;
+    border-radius: 10px; border: none; background: #185FA5; color: #fff;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin-bottom: 8px; transition: opacity 0.15s;
+  }
+  .dl-btn:hover { opacity: 0.88; }
+  .copy-btn {
+    width: 100%; padding: 11px; font-size: 14px; font-weight: 600;
+    border-radius: 10px; border: 1.5px solid #d0d0ce; background: #fff; color: #333;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: background 0.15s;
+  }
+  .copy-btn:hover { background: #f5f5f3; }
+  .error-msg { font-size: 13px; color: #c0392b; background: #fdf0ee; border-radius: 8px; padding: 10px 14px; margin-top: 1rem; border: 1px solid #f5c6c0; }
+  .reset-link { font-size: 13px; color: #999; text-align: center; margin-top: 14px; cursor: pointer; text-decoration: underline; }
+  .reset-link:hover { color: #555; }
+  .preview-wrap { margin-top: 1.25rem; border: 1px solid #e5e5e3; border-radius: 10px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+  th { background: #f5f5f3; color: #888; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; padding: 9px 12px; text-align: left; border-bottom: 1px solid #e5e5e3; }
+  td { padding: 8px 12px; border-bottom: 1px solid #f0f0ee; color: #222; word-break: break-word; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafaf8; }
+  .more-note { font-size: 12px; color: #aaa; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Owner list comparison tool</h1>
+  <p class="subtitle">Upload last month's export and this month's export from Track. Each column — email, phone, and address — is deduplicated independently and formatted to USPS standards.</p>
+
+  <div class="upload-grid">
+    <div class="upload-card" id="old-card" onclick="document.getElementById('old-input').click()">
+      <div class="upload-icon">📂</div>
+      <div class="upload-label">Last month's export</div>
+      <div class="upload-name" id="old-name">Click to upload</div>
+      <div class="upload-hint" id="old-hint">.xlsx from SharePoint</div>
+    </div>
+    <div class="upload-card" id="new-card" onclick="document.getElementById('new-input').click()">
+      <div class="upload-icon">📂</div>
+      <div class="upload-label">This month's export</div>
+      <div class="upload-name" id="new-name">Click to upload</div>
+      <div class="upload-hint" id="new-hint">.xlsx from Track</div>
+    </div>
+  </div>
+
+  <input type="file" id="old-input" accept=".xlsx">
+  <input type="file" id="new-input" accept=".xlsx">
+
+  <button class="run-btn" id="run-btn" disabled onclick="runComparison()">▶ Run comparison</button>
+
+  <div class="status-area" id="status-area" style="display:none;">
+    <div class="status-msg" id="status-msg">Processing...</div>
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+  </div>
+
+  <div id="error-area"></div>
+  <div id="results-area"></div>
+</div>
+
+<script>
+let oldData = null, newData = null;
+let finalEmails = [], finalPhones = [], finalAddresses = [];
+
+const USPS_SUFFIXES = {
+  'ALLEE':'ALY','ALLEY':'ALY','ALLY':'ALY','ALY':'ALY','ANEX':'ANX','ANNEX':'ANX','ANNX':'ANX','ANX':'ANX','ARC':'ARC','ARCADE':'ARC','AV':'AVE','AVE':'AVE','AVEN':'AVE','AVENU':'AVE','AVENUE':'AVE','AVN':'AVE','AVNUE':'AVE','BAYOO':'BYU','BAYOU':'BYU','BCH':'BCH','BEACH':'BCH','BEND':'BND','BND':'BND','BLF':'BLF','BLUF':'BLF','BLUFF':'BLF','BLUFFS':'BLFS','BLFS':'BLFS','BOT':'BTM','BOTTM':'BTM','BOTTOM':'BTM','BTM':'BTM','BLVD':'BLVD','BOUL':'BLVD','BOULEVARD':'BLVD','BOULV':'BLVD','BR':'BR','BRNCH':'BR','BRANCH':'BR','BRDGE':'BRG','BRG':'BRG','BRIDGE':'BRG','BRK':'BRK','BROOK':'BRK','BROOKS':'BRKS','BRKS':'BRKS','BURG':'BG','BG':'BG','BURGS':'BGS','BGS':'BGS','BYP':'BYP','BYPA':'BYP','BYPAS':'BYP','BYPASS':'BYP','BYPS':'BYP','CAMP':'CP','CP':'CP','CMP':'CP','CANYN':'CYN','CANYON':'CYN','CNYN':'CYN','CYN':'CYN','CAPE':'CPE','CPE':'CPE','CAUSEWAY':'CSWY','CAUSWA':'CSWY','CSWY':'CSWY','CEN':'CTR','CENT':'CTR','CENTER':'CTR','CENTR':'CTR','CENTRE':'CTR','CNTER':'CTR','CNTR':'CTR','CTR':'CTR','CENTERS':'CTRS','CTRS':'CTRS','CIR':'CIR','CIRC':'CIR','CIRCL':'CIR','CIRCLE':'CIR','CRCL':'CIR','CRCLE':'CIR','CIRCLES':'CIRS','CIRS':'CIRS','CLF':'CLF','CLIFF':'CLF','CLFS':'CLFS','CLIFFS':'CLFS','CLB':'CLB','CLUB':'CLB','COMMON':'CMN','CMN':'CMN','COMMONS':'CMNS','CMNS':'CMNS','COR':'COR','CORNER':'COR','CORNERS':'CORS','CORS':'CORS','COURSE':'CRSE','CRSE':'CRSE','COURT':'CT','CT':'CT','COURTS':'CTS','CTS':'CTS','COVE':'CV','CV':'CV','COVES':'CVS','CVS':'CVS','CREEK':'CRK','CRK':'CRK','CRESCENT':'CRES','CRES':'CRES','CRSENT':'CRES','CRSNT':'CRES','CREST':'CRST','CRST':'CRST','CROSSING':'XING','CRSSNG':'XING','XING':'XING','CROSSROAD':'XRD','XRD':'XRD','CROSSROADS':'XRDS','XRDS':'XRDS','CURVE':'CURV','CURV':'CURV','DALE':'DL','DL':'DL','DAM':'DM','DM':'DM','DIV':'DV','DIVIDE':'DV','DV':'DV','DVD':'DV','DR':'DR','DRIV':'DR','DRIVE':'DR','DRV':'DR','DRIVES':'DRS','DRS':'DRS','EST':'EST','ESTATE':'EST','ESTATES':'ESTS','ESTS':'ESTS','EXP':'EXPY','EXPR':'EXPY','EXPRESS':'EXPY','EXPRESSWAY':'EXPY','EXPW':'EXPY','EXPY':'EXPY','EXT':'EXT','EXTENSION':'EXT','EXTN':'EXT','EXTNSN':'EXT','EXTENSIONS':'EXTS','EXTS':'EXTS','FALL':'FALL','FALLS':'FLS','FLS':'FLS','FERRY':'FRY','FRRY':'FRY','FRY':'FRY','FIELD':'FLD','FLD':'FLD','FIELDS':'FLDS','FLDS':'FLDS','FLAT':'FLT','FLT':'FLT','FLATS':'FLTS','FLTS':'FLTS','FORD':'FRD','FRD':'FRD','FORDS':'FRDS','FRDS':'FRDS','FOREST':'FRST','FORESTS':'FRST','FRST':'FRST','FORG':'FRG','FORGE':'FRG','FRG':'FRG','FORGES':'FRGS','FRGS':'FRGS','FORK':'FRK','FRK':'FRK','FORKS':'FRKS','FRKS':'FRKS','FORT':'FT','FRT':'FT','FT':'FT','FREEWAY':'FWY','FREEWY':'FWY','FRWAY':'FWY','FRWY':'FWY','FWY':'FWY','GARDEN':'GDN','GARDN':'GDN','GRDEN':'GDN','GRDN':'GDN','GDN':'GDN','GARDENS':'GDNS','GDNS':'GDNS','GRDNS':'GDNS','GATEWAY':'GTWY','GATEWY':'GTWY','GATWAY':'GTWY','GTWAY':'GTWY','GTWY':'GTWY','GLEN':'GLN','GLN':'GLN','GLENS':'GLNS','GLNS':'GLNS','GREEN':'GRN','GRN':'GRN','GREENS':'GRNS','GRNS':'GRNS','GROV':'GRV','GROVE':'GRV','GRV':'GRV','GROVES':'GRVS','GRVS':'GRVS','HARB':'HBR','HARBOR':'HBR','HARBR':'HBR','HBR':'HBR','HRBOR':'HBR','HARBORS':'HBRS','HBRS':'HBRS','HAVEN':'HVN','HVN':'HVN','HT':'HTS','HTS':'HTS','HEIGHTS':'HTS','HIGHWAY':'HWY','HIGHWY':'HWY','HIWAY':'HWY','HIWY':'HWY','HWAY':'HWY','HWY':'HWY','HILL':'HL','HL':'HL','HILLS':'HLS','HLS':'HLS','HLLW':'HOLW','HOLLOW':'HOLW','HOLLOWS':'HOLW','HOLW':'HOLW','HOLWS':'HOLW','INLT':'INLT','INLET':'INLT','IS':'IS','ISLAND':'IS','ISLND':'IS','ISLANDS':'ISS','ISLNDS':'ISS','ISS':'ISS','ISLE':'ISLE','ISLES':'ISLE','JCT':'JCT','JCTION':'JCT','JCTN':'JCT','JUNCTION':'JCT','JUNCTN':'JCT','JUNCTON':'JCT','JCTNS':'JCTS','JCTS':'JCTS','JUNCTIONS':'JCTS','KEY':'KY','KY':'KY','KEYS':'KYS','KYS':'KYS','KNL':'KNL','KNOL':'KNL','KNOLL':'KNL','KNLS':'KNLS','KNOLLS':'KNLS','LK':'LK','LAKE':'LK','LKS':'LKS','LAKES':'LKS','LAND':'LAND','LANDING':'LNDG','LNDG':'LNDG','LNDNG':'LNDG','LANE':'LN','LN':'LN','LGT':'LGT','LIGHT':'LGT','LIGHTS':'LGTS','LGTS':'LGTS','LF':'LF','LOAF':'LF','LCK':'LCK','LOCK':'LCK','LCKS':'LCKS','LOCKS':'LCKS','LDG':'LDG','LDGE':'LDG','LODG':'LDG','LODGE':'LDG','LOOP':'LOOP','LOOPS':'LOOP','MALL':'MALL','MNR':'MNR','MANOR':'MNR','MANORS':'MNRS','MNRS':'MNRS','MEADOW':'MDW','MDW':'MDW','MDWS':'MDWS','MEADOWS':'MDWS','MEDOWS':'MDWS','MEWS':'MEWS','MILL':'ML','ML':'ML','MILLS':'MLS','MLS':'MLS','MISSN':'MSN','MSSN':'MSN','MISSION':'MSN','MSN':'MSN','MOTORWAY':'MTWY','MTWY':'MTWY','MNT':'MT','MT':'MT','MOUNT':'MT','MNTAIN':'MTN','MNTN':'MTN','MOUNTAIN':'MTN','MOUNTIN':'MTN','MTIN':'MTN','MTN':'MTN','MNTNS':'MTNS','MOUNTAINS':'MTNS','MTNS':'MTNS','NCK':'NCK','NECK':'NCK','ORCH':'ORCH','ORCHARD':'ORCH','ORCHRD':'ORCH','OVAL':'OVAL','OVL':'OVAL','OVERPASS':'OPAS','OPAS':'OPAS','PARK':'PARK','PRK':'PARK','PARKS':'PARK','PARKWAY':'PKWY','PARKWY':'PKWY','PKWAY':'PKWY','PKWY':'PKWY','PKY':'PKWY','PARKWAYS':'PKWY','PKWYS':'PKWY','PASS':'PASS','PASSAGE':'PSGE','PSGE':'PSGE','PATH':'PATH','PATHS':'PATH','PIKE':'PIKE','PIKES':'PIKE','PNE':'PNE','PINE':'PNE','PINES':'PNES','PNES':'PNES','PLACE':'PL','PL':'PL','PLAIN':'PLN','PLN':'PLN','PLAINS':'PLNS','PLNS':'PLNS','PLAZA':'PLZ','PLZ':'PLZ','PLZA':'PLZ','POINT':'PT','PT':'PT','POINTS':'PTS','PTS':'PTS','PORT':'PRT','PRT':'PRT','PORTS':'PRTS','PRTS':'PRTS','PR':'PR','PRAIRIE':'PR','PRR':'PR','RAD':'RADL','RADIAL':'RADL','RADIEL':'RADL','RADL':'RADL','RAMP':'RAMP','RANCH':'RNCH','RANCHES':'RNCH','RNCH':'RNCH','RNCHS':'RNCH','RAPID':'RPD','RPD':'RPD','RAPIDS':'RPDS','RPDS':'RPDS','REST':'RST','RST':'RST','RDG':'RDG','RDGE':'RDG','RIDGE':'RDG','RDGS':'RDGS','RIDGES':'RDGS','RIV':'RIV','RIVER':'RIV','RVR':'RIV','RIVR':'RIV','RD':'RD','ROAD':'RD','ROADS':'RDS','RDS':'RDS','ROUTE':'RTE','RTE':'RTE','ROW':'ROW','RUE':'RUE','RUN':'RUN','SHL':'SHL','SHOAL':'SHL','SHLS':'SHLS','SHOALS':'SHLS','SHOAR':'SHR','SHORE':'SHR','SHR':'SHR','SHOARS':'SHRS','SHORES':'SHRS','SHRS':'SHRS','SKYWAY':'SKWY','SKWY':'SKWY','SPG':'SPG','SPNG':'SPG','SPRING':'SPG','SPRNG':'SPG','SPGS':'SPGS','SPNGS':'SPGS','SPRINGS':'SPGS','SPRNGS':'SPGS','SPUR':'SPUR','SPURS':'SPUR','SQ':'SQ','SQR':'SQ','SQRE':'SQ','SQU':'SQ','SQUARE':'SQ','SQRS':'SQS','SQUARES':'SQS','SQS':'SQS','STA':'STA','STATION':'STA','STATN':'STA','STN':'STA','STRA':'STRA','STRAV':'STRA','STRAVEN':'STRA','STRAVENUE':'STRA','STRAVN':'STRA','STRVN':'STRA','STRVNUE':'STRA','STREAM':'STRM','STREME':'STRM','STRM':'STRM','STREET':'ST','STRT':'ST','ST':'ST','STR':'ST','STREETS':'STS','STS':'STS','SMT':'SMT','SUMIT':'SMT','SUMITT':'SMT','SUMMIT':'SMT','TER':'TER','TERR':'TER','TERRACE':'TER','THROUGHWAY':'TRWY','TRWY':'TRWY','TRACE':'TRCE','TRACES':'TRCE','TRCE':'TRCE','TRACK':'TRAK','TRACKS':'TRAK','TRAK':'TRAK','TRK':'TRAK','TRKS':'TRAK','TRAFFICWAY':'TRFY','TRFY':'TRFY','TRAIL':'TRL','TRAILS':'TRL','TRL':'TRL','TRLS':'TRL','TRAILER':'TRLR','TRLR':'TRLR','TRLRS':'TRLR','TUNEL':'TUNL','TUNL':'TUNL','TUNLS':'TUNL','TUNNEL':'TUNL','TUNNELS':'TUNL','TUNNL':'TUNL','TRNPK':'TPKE','TURNPIKE':'TPKE','TURNPK':'TPKE','TPKE':'TPKE','UNDERPASS':'UPAS','UPAS':'UPAS','UN':'UN','UNION':'UN','UNIONS':'UNS','UNS':'UNS','VALLEY':'VLY','VALLY':'VLY','VLLY':'VLY','VLY':'VLY','VALLEYS':'VLYS','VLYS':'VLYS','VDCT':'VIA','VIA':'VIA','VIADCT':'VIA','VIADUCT':'VIA','VIEW':'VW','VW':'VW','VIEWS':'VWS','VWS':'VWS','VILL':'VLG','VILLAG':'VLG','VILLAGE':'VLG','VILLG':'VLG','VILLIAGE':'VLG','VLG':'VLG','VILLAGES':'VLGS','VLGS':'VLGS','VILLE':'VL','VL':'VL','VIS':'VIS','VIST':'VIS','VISTA':'VIS','VST':'VIS','VSTA':'VIS','WALK':'WALK','WALKS':'WALK','WALL':'WALL','WAY':'WAY','WY':'WAY','WAYS':'WAYS','WELL':'WL','WL':'WL','WELLS':'WLS','WLS':'WLS','APT':'APT','APARTMENT':'APT','STE':'STE','SUITE':'STE','FL':'FL','FLOOR':'FL','BLDG':'BLDG','BUILDING':'BLDG','DEPT':'DEPT','DEPARTMENT':'DEPT','RM':'RM','ROOM':'RM','UNIT':'UNIT'
+};
+const DIR_ABBR = {'NORTH':'N','SOUTH':'S','EAST':'E','WEST':'W','NORTHEAST':'NE','NORTHWEST':'NW','SOUTHEAST':'SE','SOUTHWEST':'SW'};
+
+function readXlsx(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        resolve(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' }));
+      } catch(err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function setReady(which, filename) {
+  const card = document.getElementById(which + '-card');
+  document.getElementById(which + '-name').textContent = filename;
+  document.getElementById(which + '-hint').textContent = 'Ready ✓';
+  card.classList.add('ready');
+  card.querySelector('.upload-icon').textContent = '✅';
+  checkReady();
+}
+function checkReady() { document.getElementById('run-btn').disabled = !(oldData && newData); }
+
+document.getElementById('old-input').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { oldData = await readXlsx(f); setReady('old', f.name); }
+  catch { showError('Could not read last month\'s file. Make sure it\'s a .xlsx file.'); }
+});
+document.getElementById('new-input').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { newData = await readXlsx(f); setReady('new', f.name); }
+  catch { showError('Could not read this month\'s file. Make sure it\'s a .xlsx file.'); }
+});
+
+function setProgress(pct, msg) {
+  document.getElementById('status-area').style.display = 'block';
+  document.getElementById('status-msg').textContent = msg;
+  document.getElementById('progress-fill').style.width = pct + '%';
+}
+function showError(msg) {
+  document.getElementById('error-area').innerHTML = '<div class="error-msg">⚠️ ' + msg + '</div>';
+}
+function cleanPhone(raw) {
+  if (!raw) return '';
+  let s = String(raw).replace(/\D/g, '');
+  if (s.startsWith('1') && s.length === 11) s = s.slice(1);
+  return s;
+}
+function cleanAddress(raw) {
+  if (!raw) return '';
+  let s = String(raw).replace(/\./g, '').replace(/,/g, '').trim();
+  return s.split(/\s+/).map(w => {
+    const up = w.toUpperCase();
+    return USPS_SUFFIXES[up] || DIR_ABBR[up] || w;
+  }).join(' ').replace(/\s+/g, ' ').trim();
+}
+function getField(row, ...keys) {
+  for (const k of keys) {
+    for (const col of Object.keys(row)) {
+      if (col.toLowerCase().replace(/[\s_]/g,'') === k.toLowerCase().replace(/[\s_]/g,'')) {
+        const v = String(row[col] || '').trim();
+        if (v) return v;
+      }
+    }
+  }
+  return '';
+}
+
+async function runComparison() {
+  document.getElementById('error-area').innerHTML = '';
+  document.getElementById('results-area').innerHTML = '';
+  document.getElementById('run-btn').disabled = true;
+
+  setProgress(10, 'Reading unit names from last month...');
+  await new Promise(r => setTimeout(r, 50));
+
+  const oldUnits = new Set(
+    oldData.map(r => getField(r, 'UnitName', 'Unit Name').toLowerCase().trim()).filter(Boolean)
+  );
+
+  setProgress(30, 'Finding new units...');
+  await new Promise(r => setTimeout(r, 50));
+
+  const newRows = newData.filter(r => {
+    const unit = getField(r, 'UnitName', 'Unit Name').toLowerCase().trim();
+    return unit && !oldUnits.has(unit);
+  });
+
+  setProgress(55, 'Extracting and deduplicating each column independently...');
+  await new Promise(r => setTimeout(r, 50));
+
+  const allEmails = [], allPhones = [], allAddresses = [];
+
+  for (const row of newRows) {
+    const primary = getField(row, 'Email', 'email');
+    const secondary = getField(row, 'SecondaryEmail', 'Secondary Email');
+    if (primary) allEmails.push(primary);
+    if (secondary) allEmails.push(secondary);
+
+    const mobile = cleanPhone(getField(row, 'MobilePhone', 'Mobile Phone'));
+    const home = cleanPhone(getField(row, 'HomePhone', 'Home Phone'));
+    if (mobile) allPhones.push(mobile);
+    if (home) allPhones.push(home);
+
+    const contStreet = getField(row, 'ContactStreetAddress', 'Contact Street Address');
+    const compStreet = getField(row, 'CompanyStreetAddress', 'Company Street Address');
+    if (contStreet) allAddresses.push(cleanAddress(contStreet));
+    if (compStreet) allAddresses.push(cleanAddress(compStreet));
+  }
+
+  finalEmails    = [...new Map(allEmails.map(v => [v.toLowerCase(), v])).values()];
+  finalPhones    = [...new Map(allPhones.map(v => [v, v])).values()];
+  finalAddresses = [...new Map(allAddresses.map(v => [v.toLowerCase(), v])).values()];
+
+  setProgress(100, 'Done!');
+  await new Promise(r => setTimeout(r, 200));
+  document.getElementById('status-area').style.display = 'none';
+
+  const previewLen = Math.min(8, Math.max(finalEmails.length, finalPhones.length, finalAddresses.length));
+  let previewRows = '';
+  for (let i = 0; i < previewLen; i++) {
+    previewRows += `<tr><td>${finalEmails[i]||''}</td><td>${finalPhones[i]||''}</td><td>${finalAddresses[i]||''}</td></tr>`;
+  }
+  const longest = Math.max(finalEmails.length, finalPhones.length, finalAddresses.length);
+  const moreNote = longest > 8 ? `<p class="more-note">Showing 8 of up to ${longest} rows. Download to see all.</p>` : '';
+
+  document.getElementById('results-area').innerHTML = `
+    <div class="results-card">
+      <div class="stat-grid">
+        <div class="stat"><div class="stat-n">${finalEmails.length}</div><div class="stat-label">Unique emails</div></div>
+        <div class="stat"><div class="stat-n">${finalPhones.length}</div><div class="stat-label">Unique phones</div></div>
+        <div class="stat"><div class="stat-n">${finalAddresses.length}</div><div class="stat-label">Unique addresses</div></div>
+      </div>
+      <button class="dl-btn" onclick="downloadXlsx()">⬇ Download as Excel (.xlsx)</button>
+      <button class="copy-btn" onclick="copyTsv()">⎘ Copy all rows (paste into Excel)</button>
+      <div class="preview-wrap">
+        <table>
+          <thead><tr><th style="width:34%">Email</th><th style="width:22%">Phone</th><th style="width:44%">Address</th></tr></thead>
+          <tbody>${previewRows}</tbody>
+        </table>
+      </div>
+      ${moreNote}
+    </div>
+    <div class="reset-link" onclick="resetTool()">Start over with new files</div>
+  `;
+  document.getElementById('run-btn').disabled = false;
+}
+
+function downloadXlsx() {
+  const longest = Math.max(finalEmails.length, finalPhones.length, finalAddresses.length);
+  const rows = [];
+  for (let i = 0; i < longest; i++) {
+    rows.push({ 'Email': finalEmails[i]||'', 'Phone': finalPhones[i]||'', 'Address': finalAddresses[i]||'' });
+  }
+  const ws = XLSX.utils.json_to_sheet(rows, { header: ['Email','Phone','Address'] });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'New Owners');
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([wbout], { type: 'application/octet-stream' });
+  const today = new Date();
+  const fn = 'New_Owners_' + (today.getMonth()+1) + '-' + today.getDate() + '-' + today.getFullYear() + '.xlsx';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = fn;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 1000);
+}
+
+function copyTsv() {
+  const longest = Math.max(finalEmails.length, finalPhones.length, finalAddresses.length);
+  let tsv = 'Email\tPhone\tAddress\n';
+  for (let i = 0; i < longest; i++) {
+    tsv += `${finalEmails[i]||''}\t${finalPhones[i]||''}\t${finalAddresses[i]||''}\n`;
+  }
+  navigator.clipboard.writeText(tsv).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '✓ Copied!';
+    setTimeout(() => { btn.innerHTML = orig; }, 2000);
+  }).catch(() => showError('Copy failed — try the Download button instead.'));
+}
+
+function resetTool() {
+  oldData = null; newData = null; finalEmails = []; finalPhones = []; finalAddresses = [];
+  ['old','new'].forEach(w => {
+    document.getElementById(w+'-card').classList.remove('ready');
+    document.getElementById(w+'-name').textContent = 'Click to upload';
+    document.getElementById(w+'-hint').textContent = w === 'old' ? '.xlsx from SharePoint' : '.xlsx from Track';
+    document.getElementById(w+'-card').querySelector('.upload-icon').textContent = '📂';
+    document.getElementById(w+'-input').value = '';
+  });
+  document.getElementById('results-area').innerHTML = '';
+  document.getElementById('error-area').innerHTML = '';
+  document.getElementById('status-area').style.display = 'none';
+  document.getElementById('run-btn').disabled = true;
+}
+</script>
+</body>
+</html>
